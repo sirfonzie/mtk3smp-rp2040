@@ -22,6 +22,13 @@
 #include <tk/tkernel.h>
 #include "sysdepend.h"
 
+/* Watchdog tick generator (RP2040 datasheet 4.7, WATCHDOG TICK register) */
+#ifndef WATCHDOG_TICK
+#define WATCHDOG_BASE		0x40058000
+#define WATCHDOG_TICK		(WATCHDOG_BASE+0x2C)
+#define WATCHDOG_TICK_ENABLE	(1<<9)
+#endif
+
 /* 
  * PLL initialization
  */
@@ -103,6 +110,14 @@ EXPORT void startup_clock(ATR clkatr)
 	while(!(in_w(CLK_REF+CLK_x_SELECTED)&(1<<2)));
 
 	out_w(CLK_REF+CLK_x_DIV, div);
+
+	/* Microsecond tick for the TIMER block (time_us_64(), lwIP, CYW43).
+	 * The tick generator divides clk_ref (= XOSC) down to 1 MHz.  The boot
+	 * ROM programs it on the BOOTSEL path and a reboot into the application
+	 * does not reset it, but after a power-on it keeps its reset value and
+	 * the timer runs ~43x slow -- so set it here, as the SDK's clocks_init()
+	 * does. */
+	out_w(WATCHDOG_TICK, WATCHDOG_TICK_ENABLE | XOSC_MHz);
 
 	/* CLK SYS settings */
 	div = (TMCLK_MHz << 8) / TMCLK_MHz;
